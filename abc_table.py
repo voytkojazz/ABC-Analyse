@@ -8,25 +8,42 @@ round_to_two_decimals = lambda x: round(x, 2)
 def get_percentage_lambda(row_name: str, total_amount: int):
     return lambda row: row[row_name] * 100 / total_amount
 
+
 def get_reduced_lambda(lambdas: list):
     return lambda row: reduce(lambda x, f: f(x), lambdas, row)
+
 
 def add_total_price(dataframe: pd.DataFrame) -> pd.DataFrame:
     dataframe['total_price'] = dataframe['amount'] * dataframe['unitprice']
 
+
 def add_rank(dataframe: pd.DataFrame) -> pd.DataFrame:
     dataframe['rank'] = dataframe['total_price'].rank(method='min', ascending=False)
+    
+    
+def sort_by_rank(dataframe: pd.DataFrame) -> pd.DataFrame:
+    return dataframe.sort_values(by=['rank'])
+
 
 def add_percent_from_total_amount(total_amount: int, sorted_df_by_rank: pd.DataFrame): 
     lambdas = [get_percentage_lambda("amount", total_amount), round_to_two_decimals]
     sorted_df_by_rank["percent_from_total_amount"] = sorted_df_by_rank.apply(
-        get_reduced_lambda(lambdas), axis=1)
+        get_reduced_lambda(lambdas), axis=1) 
     
     
 def add_percent_from_total_price(total_price_value: float, sorted_df_by_rank: pd.DataFrame):
     lambdas = [get_percentage_lambda('total_price', total_price_value), round_to_two_decimals]
     sorted_df_by_rank["percent_from_total_price"] = sorted_df_by_rank.apply(
         get_reduced_lambda(lambdas), axis=1)
+    
+
+def add_cumulative_amount_percent(dataframe: pd.DataFrame) -> pd.DataFrame:
+    dataframe['cumulative_amount_percent'] = dataframe['percent_from_total_amount'].cumsum()
+    
+    
+def add_cumulative_price_percent(dataframe: pd.DataFrame) -> pd.DataFrame:
+    dataframe['cumulative_price_percent'] = dataframe['percent_from_total_price'].cumsum()
+    
     
 def assign_abc_groups(dataframe: pd.DataFrame, abc_groups: Args) -> pd.DataFrame:
     conditions = [

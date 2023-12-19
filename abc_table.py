@@ -13,47 +13,68 @@ def get_reduced_lambda(lambdas: list):
     return lambda row: reduce(lambda x, f: f(x), lambdas, row)
 
 
-def add_total_price(dataframe: pd.DataFrame) -> pd.DataFrame:
-    dataframe['total_price'] = dataframe['amount'] * dataframe['unitprice']
+class ABCAnalizer: 
+    
+    """Class for ABC Analysis"""
 
+    def __init__(self, dataframe: pd.DataFrame, abs_groups: Args) -> None:
+        '''Constructor for this class.'''
+        self.df = dataframe
+        self.abc_groups = abs_groups
+        self.total_amount = self.df['amount'].sum()
 
-def add_rank(dataframe: pd.DataFrame) -> pd.DataFrame:
-    dataframe['rank'] = dataframe['total_price'].rank(method='min', ascending=False)
+    def analyze(self):
+        return self._add_total_price()._add_rank()._sort_by_rank()._add_percent_from_total_amount()._add_cumulative_amount_percent()._add_percent_from_total_price()._add_cumulative_price_percent()._assign_abc_groups().df
+        
+    def _add_total_price(self):
+        '''Adds total price for every product to dataframe.'''
+        self.df['total_price'] = self.df['amount'] * self.df['unitprice']
+        self.total_price_value = self.df['total_price'].sum()
+        return self
     
+    def _add_rank(self):
+        '''ranks products by total price.'''
+        self.df['rank'] = self.df['total_price'].rank(method='min', ascending=False)
+        return self
     
-def sort_by_rank(dataframe: pd.DataFrame) -> pd.DataFrame:
-    return dataframe.sort_values(by=['rank'])
+    def _sort_by_rank(self):
+        '''Sorts dataframe by rank.'''
+        self.df = self.df.sort_values(by=['rank'])
+        return self
+    
+    def _add_percent_from_total_amount(self):
+        '''Adds percent from total amount for every product to dataframe.'''
+        lambdas = [get_percentage_lambda("amount", self.total_amount), round_to_two_decimals]
+        self.df["percent_from_total_amount"] = self.df.apply(
+            get_reduced_lambda(lambdas), axis=1)
+        return self
+    
+    def _add_cumulative_amount_percent(self):
+        '''Adds cumulative amount percent for every product to dataframe.'''
+        self.df['cumulative_amount_percent'] = self.df['percent_from_total_amount'].cumsum()
+        return self
+    
+    def _add_percent_from_total_price(self):
+        lambdas = [get_percentage_lambda('total_price', self.total_price_value), round_to_two_decimals]
+        self.df["percent_from_total_price"] = self.df.apply(
+            get_reduced_lambda(lambdas), axis=1)
+        return self
+    
+    def _add_cumulative_price_percent(self):
+        self.df['cumulative_price_percent'] = self.df['percent_from_total_price'].cumsum()
+        return self
+    
+    def _assign_abc_groups(self):
+        conditions = [
+            (self.df['cumulative_price_percent'] <= self.abc_groups.group_a_max),
+            (self.df['cumulative_price_percent'] > self.abc_groups.group_a_max) 
+            & (self.df['cumulative_price_percent'] <= (self.abc_groups.group_a_max + self.abc_groups.group_b_max)),
+            (self.df['cumulative_price_percent'] > (self.abc_groups.group_a_max + self.abc_groups.group_b_max))
+        ]
 
+        choices = ['A', 'B', 'C']
 
-def add_percent_from_total_amount(total_amount: int, sorted_df_by_rank: pd.DataFrame): 
-    lambdas = [get_percentage_lambda("amount", total_amount), round_to_two_decimals]
-    sorted_df_by_rank["percent_from_total_amount"] = sorted_df_by_rank.apply(
-        get_reduced_lambda(lambdas), axis=1) 
+        self.df['abc_group'] = np.select(conditions, choices, default='C')
+        return self
     
     
-def add_percent_from_total_price(total_price_value: float, sorted_df_by_rank: pd.DataFrame):
-    lambdas = [get_percentage_lambda('total_price', total_price_value), round_to_two_decimals]
-    sorted_df_by_rank["percent_from_total_price"] = sorted_df_by_rank.apply(
-        get_reduced_lambda(lambdas), axis=1)
-    
-
-def add_cumulative_amount_percent(dataframe: pd.DataFrame) -> pd.DataFrame:
-    dataframe['cumulative_amount_percent'] = dataframe['percent_from_total_amount'].cumsum()
-    
-    
-def add_cumulative_price_percent(dataframe: pd.DataFrame) -> pd.DataFrame:
-    dataframe['cumulative_price_percent'] = dataframe['percent_from_total_price'].cumsum()
-    
-    
-def assign_abc_groups(dataframe: pd.DataFrame, abc_groups: Args) -> pd.DataFrame:
-    conditions = [
-        (dataframe['cumulative_price_percent'] <= abc_groups.group_a_max),
-        (dataframe['cumulative_price_percent'] > abc_groups.group_a_max) & (dataframe['cumulative_price_percent'] <= (abc_groups.group_a_max + abc_groups.group_b_max)),
-        (dataframe['cumulative_price_percent'] > (abc_groups.group_a_max + abc_groups.group_b_max))
-    ]
-
-    choices = ['A', 'B', 'C']
-
-    dataframe['abc_group'] = np.select(conditions, choices, default='C')
-
-    return dataframe
